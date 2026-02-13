@@ -1,0 +1,13 @@
+{
+  "name": "cpu-analizer",
+  "version": "1.0.0",
+  "description": "Real-time CPU analyzer for mavlink-camera-manager running in Docker on Raspberry Pi",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun run --watch src/index.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

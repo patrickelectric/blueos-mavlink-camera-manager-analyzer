@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPU Analyzer - mavlink-camera-manager</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242836;
+      --border: #2e3348;
+      --text: #e1e4ed;
+      --text-dim: #8b8fa3;
+      --accent: #6366f1;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    header h1 span {
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    .status-bar {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+
+    .status-dot.connected {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+
+    .stat-value {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      color: var(--text-dim);
+    }
+
+    main {
+      padding: 20px;
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2x1 {
+      grid-template-columns: 1fr;
+    }
+
+    .grid-2x2 {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .grid-3col {
+      grid-template-columns: 2fr 1fr 1fr;
+    }
+
+    @media (max-width: 1200px) {
+      .grid-2x2, .grid-3col { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .chart-container {
+      position: relative;
+      width: 100%;
+    }
+
+    .chart-tall { height: 320px; }
+    .chart-medium { height: 280px; }
+    .chart-short { height: 240px; }
+
+    /* Thread detail table */
+    .table-container {
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      background: var(--surface2);
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-dim);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th:hover {
+      color: var(--text);
+    }
+
+    th.sorted-asc::after { content: " \u25B2"; }
+    th.sorted-desc::after { content: " \u25BC"; }
+
+    td {
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tr:hover td {
+      background: var(--surface2);
+    }
+
+    .category-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .cpu-bar {
+      display: inline-block;
+      height: 6px;
+      border-radius: 3px;
+      min-width: 2px;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .controls select, .controls button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .controls button:hover {
+      background: var(--border);
+    }
+
+    .controls button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    #no-data {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--text-dim);
+      font-size: 16px;
+    }
+
+    #no-data .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Tab navigation */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      font-family: inherit;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Stats tab specific */
+    .thread-selector {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .thread-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-dim);
+      transition: all 0.15s;
+    }
+
+    .thread-chip:hover {
+      border-color: var(--text-dim);
+    }
+
+    .thread-chip.selected {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--text);
+    }
+
+    .thread-chip .chip-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .stats-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stats-summary .stat-card {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    .stats-summary .stat-card .stat-card-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 2px;
+    }
+
+    .stats-summary .stat-card .stat-card-value {
+      font-size: 18px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CPU Analyzer <span>mavlink-camera-manager</span></h1>
+    <div class="status-bar">
+      <div class="status-indicator">
+        <div class="status-dot" id="ws-status"></div>
+        <span id="ws-label">Disconnected</span>
+      </div>
+      <div>
+        <span class="stat-label">Total CPU: </span>
+        <span class="stat-value" id="total-cpu">--</span>
+      </div>
+      <div>
+        <span class="stat-label">RSS: </span>
+        <span class="stat-value" id="total-rss">--</span>
+      </div>
+      <div>
+        <span class="stat-label">Threads: </span>
+        <span class="stat-value" id="total-threads">--</span>
+      </div>
+      <div>
+        <span class="stat-label">Samples: </span>
+        <span class="stat-value" id="total-samples">0</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="no-data">
+      <div class="spinner"></div>
+      <p>Connecting to collector...</p>
+      <p style="font-size: 13px; margin-top: 8px;">Waiting for data from the Raspberry Pi</p>
+    </div>
+
+    <div id="dashboard" style="display: none;">
+      <!-- Tab navigation -->
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="tab-realtime">Real-time Monitor</button>
+        <button class="tab-btn" data-tab="tab-stats">Statistical Analysis</button>
+      </div>
+
+      <!-- ═══ Tab 1: Real-time Monitor ═══ -->
+      <div id="tab-realtime" class="tab-content active">
+
+      <!-- Row 1: Thread CPU Timeline (full width) -->
+      <div class="grid grid-2x1" style="margin-bottom: 16px;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Thread CPU Timeline</div>
+              <div class="card-subtitle">Per-thread CPU usage over time</div>
+            </div>
+            <div class="controls">
+              <select id="timeline-window">
+                <option value="60">Last 1 min</option>
+                <option value="120">Last 2 min</option>
+                <option value="300" selected>Last 5 min</option>
+                <option value="600">Last 10 min</option>
+                <option value="0">All</option>
+              </select>
+              <button id="timeline-filter-btn" title="Show only threads with >1% avg CPU">Filter idle</button>
+            </div>
+          </div>
+          <div class="chart-container chart-tall">
+            <canvas id="chart-timeline"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Category stacked area + Doughnut + Process Overview -->
+      <div class="grid grid-3col" style="margin-bottom: 16px;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">CPU by Category</div>
+              <div class="card-subtitle">Stacked by GStreamer subsystem</div>
+            </div>
+          </div>
+          <div class="chart-container chart-medium">
+            <canvas id="chart-category"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Current Distribution</div>
+              <div class="card-subtitle">Live CPU share by category</div>
+            </div>
+          </div>
+          <div class="chart-container chart-medium">
+            <canvas id="chart-doughnut"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Process Overview</div>
+              <div class="card-subtitle">Total CPU, memory, threads</div>
+            </div>
+          </div>
+          <div class="chart-container chart-medium">
+            <canvas id="chart-overview"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Context switches (half) + empty space -->
+      <div class="grid grid-2x2" style="margin-bottom: 16px;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Context Switches (Current Interval)</div>
+              <div class="card-subtitle">Voluntary vs involuntary per thread</div>
+            </div>
+          </div>
+          <div class="chart-container chart-short">
+            <canvas id="chart-ctxsw"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Top CPU Consumers (Current)</div>
+              <div class="card-subtitle">Horizontal bar chart of current CPU%</div>
+            </div>
+          </div>
+          <div class="chart-container chart-short">
+            <canvas id="chart-topbar"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: Thread detail table (full width) -->
+      <div class="grid grid-2x1">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Thread Details</div>
+              <div class="card-subtitle">Click column headers to sort</div>
+            </div>
+          </div>
+          <div class="table-container">
+            <table id="thread-table">
+              <thead>
+                <tr>
+                  <th data-col="tid">TID</th>
+                  <th data-col="name">Name</th>
+                  <th data-col="category">Category</th>
+                  <th data-col="cpuPercent" data-default-sort="true">CPU %</th>
+                  <th data-col="avgCpu">Avg CPU %</th>
+                  <th data-col="maxCpu">Max CPU %</th>
+                  <th data-col="volCtx">Vol Ctx Sw</th>
+                  <th data-col="involCtx">Invol Ctx Sw</th>
+                  <th data-col="volCtxDelta">Vol/s</th>
+                  <th data-col="involCtxDelta">Invol/s</th>
+                </tr>
+              </thead>
+              <tbody id="thread-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      </div><!-- /tab-realtime -->
+
+      <!-- ═══ Tab 2: Statistical Analysis ═══ -->
+      <div id="tab-stats" class="tab-content">
+
+        <!-- Thread selector chips -->
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Select Threads to Analyze</div>
+              <div class="card-subtitle">Click threads to toggle; only non-idle threads shown</div>
+            </div>
+            <div class="controls">
+              <button id="stats-select-all">Select all</button>
+              <button id="stats-select-none">Clear</button>
+              <select id="stats-window">
+                <option value="60">Last 1 min</option>
+                <option value="120">Last 2 min</option>
+                <option value="300" selected>Last 5 min</option>
+                <option value="600">Last 10 min</option>
+                <option value="0">All data</option>
+              </select>
+            </div>
+          </div>
+          <div class="thread-selector" id="stats-thread-chips"></div>
+        </div>
+
+        <!-- Stats summary cards -->
+        <div class="stats-summary" id="stats-summary"></div>
+
+        <!-- Rolling Variance chart (full width) -->
+        <div class="grid grid-2x1" style="margin-bottom: 16px;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Rolling Variance Over Time</div>
+                <div class="card-subtitle">Variance of CPU% computed over a sliding window of 30 samples</div>
+              </div>
+              <div class="controls">
+                <select id="variance-window-size">
+                  <option value="10">Window: 10</option>
+                  <option value="20">Window: 20</option>
+                  <option value="30" selected>Window: 30</option>
+                  <option value="60">Window: 60</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container chart-tall">
+              <canvas id="chart-variance"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Normal Distribution charts -->
+        <div class="grid grid-2x2" style="margin-bottom: 16px;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">CPU% Distribution (Histogram + Normal Fit)</div>
+                <div class="card-subtitle">Observed frequency with fitted Gaussian overlay per thread</div>
+              </div>
+            </div>
+            <div class="chart-container chart-tall">
+              <canvas id="chart-distribution"></canvas>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Standard Deviation Over Time</div>
+                <div class="card-subtitle">Rolling standard deviation (same window as variance)</div>
+              </div>
+            </div>
+            <div class="chart-container chart-tall">
+              <canvas id="chart-stddev"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Statistics table -->
+        <div class="grid grid-2x1">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Descriptive Statistics</div>
+                <div class="card-subtitle">Per-thread statistical summary over the selected window</div>
+              </div>
+            </div>
+            <div class="table-container">
+              <table id="stats-table">
+                <thead>
+                  <tr>
+                    <th>Thread</th>
+                    <th>Category</th>
+                    <th>Mean</th>
+                    <th>Median</th>
+                    <th>Std Dev</th>
+                    <th>Variance</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>P5</th>
+                    <th>P95</th>
+                    <th>Skewness</th>
+                    <th>Kurtosis</th>
+                    <th>Samples</th>
+                  </tr>
+                </thead>
+                <tbody id="stats-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /tab-stats -->
+
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
