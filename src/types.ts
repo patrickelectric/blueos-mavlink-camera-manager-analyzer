@@ -113,8 +113,7 @@ export interface ThreadStats {
 // ── CLI configuration ──
 
 export interface Config {
-  dockerHost: string;
-  dockerPort: number;
+  dockerSocket: string;
   container: string;
   processName: string;
   sampleIntervalMs: number;

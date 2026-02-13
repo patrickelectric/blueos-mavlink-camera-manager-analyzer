@@ -1,16 +1,66 @@
 /**
  * Docker Engine REST API client.
  *
+ * Connects via the Docker Unix socket (default /var/run/docker.sock) using
+ * Node.js's built-in http module with the socketPath option.
+ *
  * Executes commands inside a container via the exec create + start endpoints
  * and returns the combined stdout as a string. Handles the Docker multiplexed
  * stream framing (8-byte header per frame).
  */
 
-export class DockerClient {
-  private baseUrl: string;
+import * as http from "node:http";
 
-  constructor(host: string, port: number) {
-    this.baseUrl = `http://${host}:${port}`;
+export class DockerClient {
+  private socketPath: string;
+
+  constructor(socketPath: string = "/var/run/docker.sock") {
+    this.socketPath = socketPath;
+  }
+
+  /** Human-readable description of the connection for logs. */
+  get endpoint(): string {
+    return `unix://${this.socketPath}`;
+  }
+
+  /**
+   * Low-level HTTP request over the Docker Unix socket.
+   * Returns the raw response body as a Buffer.
+   */
+  private request(
+    path: string,
+    options: { method?: string; body?: string } = {}
+  ): Promise<{ statusCode: number; body: Buffer }> {
+    return new Promise((resolve, reject) => {
+      const headers: Record<string, string> = {};
+      if (options.body) {
+        headers["Content-Type"] = "application/json";
+        headers["Content-Length"] = String(Buffer.byteLength(options.body));
+      }
+
+      const req = http.request(
+        {
+          socketPath: this.socketPath,
+          path,
+          method: options.method || "GET",
+          headers,
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          res.on("end", () => {
+            resolve({
+              statusCode: res.statusCode || 0,
+              body: Buffer.concat(chunks),
+            });
+          });
+          res.on("error", reject);
+        }
+      );
+      req.on("error", reject);
+      if (options.body) req.write(options.body);
+      req.end();
+    });
   }
 
   /**
@@ -18,39 +68,32 @@ export class DockerClient {
    */
   async exec(container: string, cmd: string[]): Promise<string> {
     // Step 1: Create exec instance
-    const createRes = await fetch(
-      `${this.baseUrl}/containers/${container}/exec`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          AttachStdout: true,
-          AttachStderr: true,
-          Cmd: cmd,
-        }),
-      }
-    );
+    const createRes = await this.request(`/containers/${container}/exec`, {
+      method: "POST",
+      body: JSON.stringify({
+        AttachStdout: true,
+        AttachStderr: true,
+        Cmd: cmd,
+      }),
+    });
 
-    if (!createRes.ok) {
-      const text = await createRes.text();
+    if (createRes.statusCode >= 400) {
       throw new Error(
-        `Docker exec create failed (${createRes.status}): ${text}`
+        `Docker exec create failed (${createRes.statusCode}): ${createRes.body.toString()}`
       );
     }
 
-    const { Id: execId } = (await createRes.json()) as { Id: string };
+    const { Id: execId } = JSON.parse(createRes.body.toString());
 
     // Step 2: Start exec and read output
-    const startRes = await fetch(`${this.baseUrl}/exec/${execId}/start`, {
+    const startRes = await this.request(`/exec/${execId}/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ Detach: false, Tty: false }),
     });
 
-    if (!startRes.ok) {
-      const text = await startRes.text();
+    if (startRes.statusCode >= 400) {
       throw new Error(
-        `Docker exec start failed (${startRes.status}): ${text}`
+        `Docker exec start failed (${startRes.statusCode}): ${startRes.body.toString()}`
       );
     }
 
@@ -58,8 +101,7 @@ export class DockerClient {
     //   [0]    = stream type (1=stdout, 2=stderr)
     //   [1-3]  = padding zeros
     //   [4-7]  = payload size (big-endian uint32)
-    const rawBuffer = await startRes.arrayBuffer();
-    return this.demuxDockerStream(new Uint8Array(rawBuffer));
+    return this.demuxDockerStream(new Uint8Array(startRes.body));
   }
 
   /**
@@ -113,8 +155,8 @@ export class DockerClient {
    */
   async ping(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/_ping`);
-      return res.ok;
+      const res = await this.request("/_ping");
+      return res.statusCode >= 200 && res.statusCode < 400;
     } catch {
       return false;
     }

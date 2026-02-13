@@ -39,7 +39,7 @@ export class Collector {
   constructor(config: Config, store: SnapshotStore) {
     this.config = config;
     this.store = store;
-    this.docker = new DockerClient(config.dockerHost, config.dockerPort);
+    this.docker = new DockerClient(config.dockerSocket);
   }
 
   /**
@@ -58,11 +58,11 @@ export class Collector {
     const ok = await this.docker.ping();
     if (!ok) {
       throw new Error(
-        `Cannot reach Docker API at ${this.config.dockerHost}:${this.config.dockerPort}`
+        `Cannot reach Docker API at ${this.docker.endpoint}`
       );
     }
     console.log(
-      `[collector] Connected to Docker at ${this.config.dockerHost}:${this.config.dockerPort}`
+      `[collector] Connected to Docker at ${this.docker.endpoint}`
     );
 
     // Detect number of CPUs

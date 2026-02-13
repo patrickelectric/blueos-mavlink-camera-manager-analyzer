@@ -11,7 +11,7 @@ A live web dashboard served on `localhost:3000` streams data over WebSocket and 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) v1.2 or later
-- Docker Engine REST API accessible on the target host (TCP, default `192.168.31.113:2375`)
+- Docker Unix socket accessible (default `/var/run/docker.sock`)
 
 ## Quick Start
 
@@ -35,8 +35,7 @@ All options have sensible defaults and are optional:
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--host <ip>` | Docker host IP address | `192.168.31.113` |
-| `--docker-port <n>` | Docker Engine API port | `2375` |
+| `--docker-socket <path>` | Docker Unix socket path | `/var/run/docker.sock` |
 | `--container <name>` | Docker container name | `blueos-core` |
 | `--process <name>` | Process name pattern for `pgrep` | `mavlink-camera-` |
 | `--interval <ms>` | Sampling interval in milliseconds | `1000` |
@@ -47,7 +46,7 @@ All options have sensible defaults and are optional:
 Example with custom settings:
 
 ```bash
-bun run src/index.ts --host 10.0.0.50 --interval 500 --port 8080
+bun run src/index.ts --interval 500 --port 8080
 ```
 
 ## Dashboard
@@ -63,22 +62,108 @@ The web dashboard provides six views, accessible via tabs:
 
 Legend selections persist across tab switches so you can compare the same threads across different chart types.
 
+## BlueOS Extension
+
+The CPU Analyzer can run as a [BlueOS extension](https://github.com/BlueOS-community/BlueOS-examples), appearing as a tool in the BlueOS web interface alongside the vehicle dashboard.
+
+### How it works inside BlueOS
+
+When deployed as a BlueOS extension the container mounts the host's Docker socket (`/var/run/docker.sock`). The Docker client connects directly via the Unix socket using Bun's native `fetch({ unix })` support -- no TCP proxy needed. The dashboard is served on port 3000 (mapped by BlueOS to a dynamic host port).
+
+### Build for BlueOS
+
+Enable multi-architecture builds (required for Raspberry Pi arm/v7):
+
+```bash
+docker buildx create --name multiarch --driver docker-container --use
+docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+```
+
+Build and push to your Docker Hub registry:
+
+```bash
+cd cpu-analizer
+docker buildx build \
+  --platform linux/amd64,linux/arm/v7 \
+  -t patrickelectric/blueos-mavlink-camera-manager-analyzer:latest \
+  --output type=registry .
+```
+
+### Install in BlueOS
+
+1. Open the BlueOS web interface and navigate to **Extensions Manager**.
+2. Click **+** to install a custom extension.
+3. Enter the Docker Hub image: `patrickelectric/blueos-mavlink-camera-manager-analyzer:latest`
+4. BlueOS will pull the image, create the container with the correct permissions (Docker socket mount and port mapping), and add the extension to the sidebar.
+5. Click the extension to open the live CPU dashboard.
+
+### Environment Variables
+
+When running as a BlueOS extension you can override settings via environment variables instead of CLI flags:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKER_SOCKET` | Docker Unix socket path | `/var/run/docker.sock` |
+| `CONTAINER` | Docker container to monitor | `blueos-core` |
+| `PROCESS` | Process name pattern for `pgrep` | `mavlink-camera-` |
+| `INTERVAL` | Sampling interval in milliseconds | `1000` |
+| `HISTORY` | Maximum samples to keep in memory | `600` |
+| `PORT` | Dashboard HTTP port | `3000` |
+
+### Run on the Raspberry Pi
+
+Once the image is pushed, SSH into the Pi and run:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  patrickelectric/blueos-mcm-analyzer:master
+```
+
+Then open `http://<raspberry-pi-ip>:3000` in your browser.
+
+To override settings via environment variables:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e CONTAINER=blueos-core \
+  -e PROCESS=mavlink-camera- \
+  -e INTERVAL=500 \
+  patrickelectric/blueos-mcm-analyzer:master
+```
+
+### Build and run locally (without BlueOS)
+
+```bash
+cd cpu-analizer
+docker build -t cpu-analyzer .
+docker run --rm -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  cpu-analyzer
+```
+
+Then open <http://localhost:3000>.
+
 ## Project Structure
 
 ```
 cpu-analizer/
   public/
-    index.html        # Dashboard HTML (tabs, chart containers)
-    app.js            # Frontend JS (Chart.js charts, WebSocket client)
+    index.html           # Dashboard HTML (tabs, chart containers)
+    app.js               # Frontend JS (Chart.js charts, WebSocket client)
   src/
-    index.ts          # Entry point: CLI parsing, component wiring
-    types.ts          # TypeScript interfaces (Snapshot, ThreadSample, Config, etc.)
-    docker.ts         # Docker Engine REST API client (exec via HTTP)
-    parser.ts         # Parses raw /proc output into typed structures
-    categorizer.ts    # Thread name -> GStreamer category classification rules
-    collector.ts      # Periodic data collection and CPU delta computation
-    store.ts          # In-memory ring-buffer for snapshot history
-    server.ts         # Bun HTTP server, static files, REST API, WebSocket
+    index.ts             # Entry point: CLI parsing, component wiring
+    types.ts             # TypeScript interfaces (Snapshot, ThreadSample, Config, etc.)
+    docker.ts            # Docker Engine REST API client (exec via HTTP)
+    parser.ts            # Parses raw /proc output into typed structures
+    categorizer.ts       # Thread name -> GStreamer category classification rules
+    collector.ts         # Periodic data collection and CPU delta computation
+    store.ts             # In-memory ring-buffer for snapshot history
+    server.ts            # Bun HTTP server, static files, REST API, WebSocket
+  Dockerfile             # BlueOS extension image (oven/bun + socat)
+  docker-entrypoint.sh   # Bridges Docker socket to TCP, starts the app
+  .dockerignore          # Excludes node_modules etc. from build context
   package.json
   tsconfig.json
 ```
@@ -86,7 +171,7 @@ cpu-analizer/
 ## How It Works
 
 ```
-┌──────────────────────┐     Docker Engine API      ┌──────────────────────┐
+┌──────────────────────┐  Docker socket (unix)      ┌──────────────────────┐
 │   Bun (this tool)    │ ──── POST /exec/create ──> │  Target Container    │
 │                      │ ──── POST /exec/start ───> │  (blueos-core)       │
 │  collector.ts        │ <─── /proc/PID/task/*  ─── │                      │
@@ -150,6 +235,10 @@ The categorizer recognizes these mavlink-camera-manager thread patterns:
 | `/api/stats` | GET | Computed per-thread statistics (avg, max, current CPU%) |
 | `/api/config` | GET | Category colors and labels for chart rendering |
 | `/ws` | WS | Real-time snapshot stream; sends full history on connect |
+
+## Repository
+
+<https://github.com/patrickelectric/blueos-mavlink-camera-manager-analyzer>
 
 ## License
 
