@@ -25,6 +25,33 @@ const threadAccum = new Map(); // tid -> { cpuSum, maxCpu, count }
 // Track which datasets the user has hidden via legend clicks, keyed by chart id -> Set of labels
 const hiddenDatasets = new Map();
 
+// ── Theme ──
+
+const THEME_DARK = { color: "#8b8fa3", borderColor: "#2e3348", icon: "\u263E" };
+const THEME_LIGHT = { color: "#5c5f77", borderColor: "#d1d5db", icon: "\u2600" };
+
+function getTheme() {
+  return document.documentElement.getAttribute("data-theme") || "dark";
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("cpu-analyzer-theme", theme);
+  const t = theme === "light" ? THEME_LIGHT : THEME_DARK;
+  const btn = document.getElementById("theme-toggle");
+  if (btn) btn.innerHTML = t.icon;
+  Chart.defaults.color = t.color;
+  Chart.defaults.borderColor = t.borderColor;
+  for (const chart of Object.values(charts)) {
+    chart.update("none");
+  }
+}
+
+function initTheme() {
+  const saved = localStorage.getItem("cpu-analyzer-theme") || "dark";
+  applyTheme(saved);
+}
+
 // ── Bootstrap ──
 
 async function init() {
@@ -43,6 +70,7 @@ async function init() {
 
   initCharts();
   initStatsCharts();
+  initTheme();
   connectWebSocket();
   setupEventListeners();
 }
@@ -126,8 +154,9 @@ function showDashboard() {
 // ── Chart initialization ──
 
 function initCharts() {
-  Chart.defaults.color = "#8b8fa3";
-  Chart.defaults.borderColor = "#2e3348";
+  const t = getTheme() === "light" ? THEME_LIGHT : THEME_DARK;
+  Chart.defaults.color = t.color;
+  Chart.defaults.borderColor = t.borderColor;
   Chart.defaults.font.family = "'Inter', sans-serif";
   Chart.defaults.font.size = 11;
   Chart.defaults.animation.duration = 0;
@@ -234,12 +263,12 @@ function initCharts() {
         {
           label: "Voluntary /s",
           data: [],
-          backgroundColor: "rgba(99, 102, 241, 0.7)",
+          backgroundColor: "rgba(68, 119, 170, 0.7)", // Paul Tol bright blue
         },
         {
           label: "Involuntary /s",
           data: [],
-          backgroundColor: "rgba(239, 68, 68, 0.7)",
+          backgroundColor: "rgba(204, 102, 119, 0.7)", // Paul Tol muted rose
         },
       ],
     },
@@ -507,8 +536,8 @@ function updateOverview() {
     {
       label: "Total CPU %",
       data: windowed.map((s) => ({ x: s.timestamp, y: s.totalCpuPercent })),
-      borderColor: "#6366f1",
-      backgroundColor: "#6366f120",
+      borderColor: "#4477AA",  // Paul Tol bright blue
+      backgroundColor: "#4477AA20",
       yAxisID: "yCpu",
       tension: 0.2,
       fill: true,
@@ -516,7 +545,7 @@ function updateOverview() {
     {
       label: "RSS (MB)",
       data: windowed.map((s) => ({ x: s.timestamp, y: Math.round(s.process.rssKb / 1024 * 10) / 10 })),
-      borderColor: "#22c55e",
+      borderColor: "#228833",  // Paul Tol bright green
       yAxisID: "yMem",
       tension: 0.2,
     },
@@ -591,6 +620,14 @@ function updateTable(latest) {
 // ── Event listeners ──
 
 function setupEventListeners() {
+  // Theme toggle
+  const themeBtn = document.getElementById("theme-toggle");
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      applyTheme(getTheme() === "dark" ? "light" : "dark");
+    });
+  }
+
   // Tab switching
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {

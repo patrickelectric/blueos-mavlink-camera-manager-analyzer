@@ -63,26 +63,31 @@ export function categorizeThread(name: string): ThreadCategory {
 /**
  * Color palette for each category (used by both backend stats and frontend charts).
  */
+/**
+ * Paul Tol color palette — colorblind-friendly qualitative colors.
+ * Sources: Muted, Vibrant, and Bright schemes from
+ * https://personal.sron.nl/~pault/data/colourschemes.pdf
+ */
 export const CATEGORY_COLORS: Record<ThreadCategory, string> = {
-  ImageSink: "#e74c3c",
-  RTSPSink: "#e67e22",
-  UDPSink: "#f39c12",
-  RTSPServerFactory: "#2ecc71",
-  WebRTCSink: "#1abc9c",
-  ProxySrcInternal: "#3498db",
-  UnnamedQueue: "#9b59b6",
-  GstUDPSrc: "#34495e",
-  GstRTPJitter: "#16a085",
-  GstRTPSession: "#27ae60",
-  GstFakeSrc: "#95a5a6",
-  GstShmSrc: "#7f8c8d",
-  GstTimer: "#bdc3c7",
-  TokioRuntime: "#2980b9",
-  ActixServer: "#8e44ad",
-  MAVLink: "#c0392b",
-  RTSPServerLoop: "#d35400",
-  MainThread: "#2c3e50",
-  Other: "#7f8c8d",
+  ImageSink: "#CC6677",          // rose (muted)
+  RTSPSink: "#EE7733",           // orange (vibrant)
+  UDPSink: "#CCBB44",            // yellow (bright)
+  RTSPServerFactory: "#228833",  // green (bright)
+  WebRTCSink: "#009988",         // teal (vibrant)
+  ProxySrcInternal: "#33BBEE",   // cyan (vibrant)
+  UnnamedQueue: "#AA4499",       // purple (muted)
+  GstUDPSrc: "#332288",          // indigo (muted)
+  GstRTPJitter: "#44AA99",       // teal (muted)
+  GstRTPSession: "#117733",      // green (muted)
+  GstFakeSrc: "#BBBBBB",         // grey
+  GstShmSrc: "#999933",          // olive (muted)
+  GstTimer: "#DDCC77",           // sand (muted)
+  TokioRuntime: "#4477AA",       // blue (bright)
+  ActixServer: "#882255",        // wine (muted)
+  MAVLink: "#CC3311",            // red (vibrant)
+  RTSPServerLoop: "#EE3377",     // magenta (vibrant)
+  MainThread: "#0077BB",         // blue (vibrant)
+  Other: "#88CCEE",              // cyan (muted)
 };
 
 /**
