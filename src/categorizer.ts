@@ -65,29 +65,35 @@ export function categorizeThread(name: string): ThreadCategory {
  */
 /**
  * Paul Tol color palette — colorblind-friendly qualitative colors.
- * Sources: Muted, Vibrant, and Bright schemes from
- * https://personal.sron.nl/~pault/data/colourschemes.pdf
+ * Source: https://personal.sron.nl/~pault/data/colourschemes.pdf
+ *
+ * The Bright scheme (6 non-grey, max contrast) is assigned to the
+ * categories most commonly visible together in charts; Vibrant and
+ * Muted fill in the less-frequent categories.
  */
 export const CATEGORY_COLORS: Record<ThreadCategory, string> = {
-  ImageSink: "#CC6677",          // rose (muted)
-  RTSPSink: "#EE7733",           // orange (vibrant)
-  UDPSink: "#CCBB44",            // yellow (bright)
-  RTSPServerFactory: "#228833",  // green (bright)
-  WebRTCSink: "#009988",         // teal (vibrant)
-  ProxySrcInternal: "#33BBEE",   // cyan (vibrant)
-  UnnamedQueue: "#AA4499",       // purple (muted)
-  GstUDPSrc: "#332288",          // indigo (muted)
-  GstRTPJitter: "#44AA99",       // teal (muted)
-  GstRTPSession: "#117733",      // green (muted)
+  // ── Bright scheme (most commonly co-occurring in charts) ──
+  TokioRuntime: "#4477AA",       // blue
+  GstRTPJitter: "#EE6677",       // red
+  UnnamedQueue: "#66CCEE",       // cyan
+  ActixServer: "#AA3377",        // purple
+  MAVLink: "#CCBB44",            // yellow
+  GstUDPSrc: "#228833",          // green
+  // ── Vibrant scheme (moderately common) ──
+  MainThread: "#EE7733",         // orange
+  RTSPSink: "#0077BB",           // blue
+  WebRTCSink: "#33BBEE",         // cyan
+  RTSPServerLoop: "#EE3377",     // magenta
+  ImageSink: "#CC3311",          // red
+  RTSPServerFactory: "#009988",  // teal
+  // ── Muted scheme (infrequent / background) ──
+  ProxySrcInternal: "#44AA99",   // teal
+  GstRTPSession: "#117733",      // green
   GstFakeSrc: "#BBBBBB",         // grey
-  GstShmSrc: "#999933",          // olive (muted)
-  GstTimer: "#DDCC77",           // sand (muted)
-  TokioRuntime: "#4477AA",       // blue (bright)
-  ActixServer: "#882255",        // wine (muted)
-  MAVLink: "#CC3311",            // red (vibrant)
-  RTSPServerLoop: "#EE3377",     // magenta (vibrant)
-  MainThread: "#0077BB",         // blue (vibrant)
-  Other: "#88CCEE",              // cyan (muted)
+  GstShmSrc: "#999933",          // olive
+  GstTimer: "#DDCC77",           // sand
+  UDPSink: "#882255",            // wine
+  Other: "#AA4499",              // purple
 };
 
 /**

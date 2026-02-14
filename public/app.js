@@ -263,12 +263,12 @@ function initCharts() {
         {
           label: "Voluntary /s",
           data: [],
-          backgroundColor: "rgba(68, 119, 170, 0.7)", // Paul Tol bright blue
+          backgroundColor: "rgba(68, 119, 170, 0.7)", // Paul Tol bright blue #4477AA
         },
         {
           label: "Involuntary /s",
           data: [],
-          backgroundColor: "rgba(204, 102, 119, 0.7)", // Paul Tol muted rose
+          backgroundColor: "rgba(238, 102, 119, 0.7)", // Paul Tol bright red #EE6677
         },
       ],
     },
