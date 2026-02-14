@@ -510,14 +510,14 @@ function updateDoughnut(latest) {
 }
 
 function updateContextSwitches(latest) {
-  // Show top 15 threads by context switch rate
+  // Show top 8 threads by context switch rate
   const threads = latest.threads
     .filter((t) => t.voluntaryCtxSwitchesDelta > 0 || t.involuntaryCtxSwitchesDelta > 0)
     .sort((a, b) =>
       (b.voluntaryCtxSwitchesDelta + b.involuntaryCtxSwitchesDelta) -
       (a.voluntaryCtxSwitchesDelta + a.involuntaryCtxSwitchesDelta)
     )
-    .slice(0, 15);
+    .slice(0, 8);
 
   saveHidden("ctxsw");
   charts.ctxsw.data.labels = threads.map((t) => t.name);
